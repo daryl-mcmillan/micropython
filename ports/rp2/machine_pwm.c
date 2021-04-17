@@ -107,29 +107,16 @@ STATIC mp_obj_t machine_pwm_freq(size_t n_args, const mp_obj_t *args) {
         // Maximum "top" is set at 65534 to be able to achieve 100% duty with 65535.
         #define TOP_MAX 65534
         mp_int_t freq = mp_obj_get_int(args[1]);
-        uint32_t div16_top = 16 * source_hz / freq;
-        uint32_t top = 1;
-        for (;;) {
-            // Try a few small prime factors to get close to the desired frequency.
-            if (div16_top >= 16 * 5 && div16_top % 5 == 0 && top * 5 <= TOP_MAX) {
-                div16_top /= 5;
-                top *= 5;
-            } else if (div16_top >= 16 * 3 && div16_top % 3 == 0 && top * 3 <= TOP_MAX) {
-                div16_top /= 3;
-                top *= 3;
-            } else if (div16_top >= 16 * 2 && top * 2 <= TOP_MAX) {
-                div16_top /= 2;
-                top *= 2;
-            } else {
-                break;
-            }
-        }
-        if (div16_top < 16) {
+        uint32_t clock16_top = 16 * source_hz / freq;
+        // Round the clock divider up because top can be lower than TOP_MAX but not higher.
+        uint32_t div16 = (clock16_top + TOP_MAX - 1) / TOP_MAX;
+        uint32_t top = clock16_top / div16;
+        if (div16 < 16) {
             mp_raise_ValueError(MP_ERROR_TEXT("freq too large"));
-        } else if (div16_top >= 256 * 16) {
+        } else if (div16 >= 256 * 16) {
             mp_raise_ValueError(MP_ERROR_TEXT("freq too small"));
         }
-        pwm_hw->slice[self->slice].div = div16_top;
+        pwm_hw->slice[self->slice].div = div16;
         pwm_hw->slice[self->slice].top = top;
         return mp_const_none;
     }
